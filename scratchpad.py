@@ -23,9 +23,43 @@ logging.basicConfig(
     ],
 )
 
+# Constants
+NUM_WEEKS = 52
+
 # Set the paths to the input and output files
 team_list_path = os.path.join(data_directory, "team_list.xlsx")
+assignment_path = os.path.join(data_directory, "assignments.xlsx")
 assignment_data_log_path = os.path.join(log_directory, "assignment_data_log.csv")
+
+def generate_schedule_weeks():
+    # Get the current date
+    current_date = datetime.now()
+
+    # Calculate the start date (Monday of the current week)
+    start_date = current_date - timedelta(days=current_date.weekday())
+
+    # Initialize lists for start and end dates
+    start_dates = []
+    end_dates = []
+
+    # Generate start and end dates for each week
+    for week in range(NUM_WEEKS):
+        end_date = start_date + timedelta(days=4)  # Assuming assignments are from Monday to Friday
+        start_dates.append(start_date.strftime("%m-%d-%Y"))
+        end_dates.append(end_date.strftime("%m-%d-%Y"))
+
+        # Move to the next week
+        start_date += timedelta(days=7)
+
+    # Create a DataFrame with start and end dates
+    schedule_df = pd.DataFrame({"start_date": start_dates, "end_date": end_dates})
+
+    # Write the schedule to assignments.xlsx
+    schedule_df.to_excel(assignment_path, index=False)
+
+    logging.info(f"Schedule dates written to {assignment_path}")
+    print(f"Schedule dates written to {assignment_path}.")
+
 
 def read_employee_data(file_path):
     try:
@@ -38,7 +72,7 @@ def read_employee_data(file_path):
         return None
 
 def load_and_detect_changes(current_employee_data, previous_employee_data):
-    logging.info("Loading and detecting changes in employee data...")
+    logging.info("Load and detect changes in employee data")
     print("Loading and detecting changes in employee data...")
     if previous_employee_data is not None:
         changes = detect_changes(previous_employee_data, current_employee_data)
@@ -71,15 +105,15 @@ def log_activity(activity_description):
     print(f"{formatted_timestamp} - {activity_description}")
 
 def backup_existing_assignments():
-    logging.info("Backing up existing assignments...")
+    logging.info("Back up existing assignments")
     print("Backing up existing assignments...")
     if os.path.exists(assignment_data_log_path):
         timestamp_str = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
         new_file_name = os.path.join(history_directory, f"assignment_data_log_as_of_{timestamp_str}.csv")
 
         os.rename(assignment_data_log_path, new_file_name)
-        logging.info(f"Assignment data log backed up to {new_file_name}")
-        print(f"Assignment data log backed up to {new_file_name}")
+        logging.info(f"Back up {assignment_path} to {new_file_name}")
+        print(f"Assignment log backed up to {new_file_name}")
 
         # Keep only the last 3 backups, delete older ones
         delete_old_backups(history_directory, "assignment_data_log", keep_latest=3)
@@ -88,7 +122,7 @@ def backup_existing_assignments():
         print("No existing assignment data log to back up.")
 
 def delete_old_backups(directory, base_name, keep_latest):
-    logging.info(f"Deleting old backups in {directory}...")
+    logging.info(f"Delete old backups in {directory}")
     print(f"Deleting old backups in {directory}...")
     files = [f for f in os.listdir(directory) if f.startswith(f"{base_name}_as_of_")]
     files.sort(key=lambda x: os.path.getctime(os.path.join(directory, x)), reverse=True)
@@ -97,11 +131,11 @@ def delete_old_backups(directory, base_name, keep_latest):
     for old_file in files[keep_latest:]:
         os.remove(os.path.join(directory, old_file))
         logging.info(f"Retain maximum of {keep_latest} saved logs. Old {base_name} backup deleted: {old_file}")
-        print(f"Retain maximum of {keep_latest} saved logs. Old {base_name} backup deleted: {old_file}")
+        print(f"Retain maximum of {keep_latest} saved logs. Old {base_name} backup deleted.")
 
 def main():
+    logging.info("Start script execution")
     print("Starting script execution...")
-    logging.info("Starting script execution...")
     current_employee_data = read_employee_data(team_list_path)
     previous_employee_data = read_employee_data(team_list_path)
 
@@ -110,11 +144,13 @@ def main():
 
         backup_existing_assignments()
 
-        print("Script execution completed with changes.\n")
-        logging.info("Script execution completed with changes.\n")
+        generate_schedule_weeks()
+
+        logging.info("Script execution completed.\n")
+        print("Script execution completed.\n")
     else:
-        print("Exiting program due to errors.\n")
         logging.error("Exiting program due to errors.\n")
+        print("Exiting program due to errors.\n")
 
 if __name__ == "__main__":
     main()
