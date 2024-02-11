@@ -1,4 +1,5 @@
 import os
+import shutil
 import pandas as pd
 import logging
 from datetime import datetime, timedelta
@@ -19,47 +20,37 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         logging.FileHandler(os.path.join(log_directory, "script_events.log")),
-        logging.FileHandler(os.path.join(log_directory, "assignment_data_log.csv")),
     ],
 )
 
 # Constants
 NUM_WEEKS = 52
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
 # Set the paths to the input and output files
 team_list_path = os.path.join(data_directory, "team_list.xlsx")
 assignment_path = os.path.join(data_directory, "assignments.xlsx")
-assignment_data_log_path = os.path.join(log_directory, "assignment_data_log.csv")
 
 def generate_schedule_weeks():
-    # Get the current date
     current_date = datetime.now()
-
-    # Calculate the start date (Monday of the current week)
     start_date = current_date - timedelta(days=current_date.weekday())
+    
+    # Check if the start_date is not a Monday (weekday() returns 0 for Monday)
+    if start_date.weekday() != 0:
+        start_date = start_date - timedelta(days=start_date.weekday())
 
-    # Initialize lists for start and end dates
-    start_dates = []
-    end_dates = []
-
-    # Generate start and end dates for each week
+    start_dates, end_dates = [], []
     for week in range(NUM_WEEKS):
         end_date = start_date + timedelta(days=4)  # Assuming assignments are from Monday to Friday
         start_dates.append(start_date.strftime("%m-%d-%Y"))
         end_dates.append(end_date.strftime("%m-%d-%Y"))
-
-        # Move to the next week
         start_date += timedelta(days=7)
 
-    # Create a DataFrame with start and end dates
     schedule_df = pd.DataFrame({"start_date": start_dates, "end_date": end_dates})
-
-    # Write the schedule to assignments.xlsx
     schedule_df.to_excel(assignment_path, index=False)
 
     logging.info(f"Schedule dates written to {assignment_path}")
     print(f"Schedule dates written to {assignment_path}.")
-
 
 def read_employee_data(file_path):
     try:
@@ -107,19 +98,36 @@ def log_activity(activity_description):
 def backup_existing_assignments():
     logging.info("Back up existing assignments")
     print("Backing up existing assignments...")
-    if os.path.exists(assignment_data_log_path):
+    if os.path.exists(assignment_path):
         timestamp_str = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
-        new_file_name = os.path.join(history_directory, f"assignment_data_log_as_of_{timestamp_str}.csv")
+        new_file_name = os.path.join(history_directory, f"assignments_backup_as_of_{timestamp_str}.xlsx")
 
-        os.rename(assignment_data_log_path, new_file_name)
+        shutil.copy2(assignment_path, new_file_name)
         logging.info(f"Back up {assignment_path} to {new_file_name}")
         print(f"Assignment log backed up to {new_file_name}")
 
         # Keep only the last 3 backups, delete older ones
-        delete_old_backups(history_directory, "assignment_data_log", keep_latest=3)
+        delete_old_backups(history_directory, "assignments_backup", keep_latest=3)
     else:
         logging.info("No existing assignment data log to back up.")
         print("No existing assignment data log to back up.")
+
+def backup_existing_team_list():
+    logging.info("Back up existing team list")
+    print("Backing up existing team list...")
+    if os.path.exists(team_list_path):
+        timestamp_str = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
+        new_file_name = os.path.join(history_directory, f"team_list_backup_as_of_{timestamp_str}.xlsx")
+
+        shutil.copy2(team_list_path, new_file_name)
+        logging.info(f"Back up {team_list_path} to {new_file_name}")
+        print(f"Team list backed up to {new_file_name}")
+
+        # Keep only the last 3 backups, delete older ones
+        delete_old_backups(history_directory, "team_list_backup", keep_latest=3)
+    else:
+        logging.info("No existing team list to back up.")
+        print("No existing team list to back up.")
 
 def delete_old_backups(directory, base_name, keep_latest):
     logging.info(f"Delete old backups in {directory}")
@@ -133,9 +141,41 @@ def delete_old_backups(directory, base_name, keep_latest):
         logging.info(f"Retain maximum of {keep_latest} saved logs. Old {base_name} backup deleted: {old_file}")
         print(f"Retain maximum of {keep_latest} saved logs. Old {base_name} backup deleted.")
 
+def generate_random_pairs(agents):
+    random.shuffle(agents)
+    pairs = []
+    while agents:
+        agent1 = agents.pop()
+        agent2 = agents.pop() if agents else None
+        pairs.append((agent1, agent2))
+    return pairs
+
+def assign_duties(schedule_df, team_df):
+    agents = list(team_df["Name"])
+    random_pairs = generate_random_pairs(agents)
+
+    for index, row in schedule_df.iterrows():
+        # start_date = datetime.strptime(row["start_date"], "%m-%d-%Y")
+        # end_date = datetime.strptime(row["end_date"], "%m-%d-%Y")
+
+        week_agents = random_pairs[index % len(random_pairs)]
+
+        schedule_df.at[index, "Agent1"] = week_agents[0]
+        schedule_df.at[index, "Email1"] = team_df.loc[team_df["Name"] == week_agents[0], "Email"].values[0]
+
+        if week_agents[1]:
+            schedule_df.at[index, "Agent2"] = week_agents[1]
+            schedule_df.at[index, "Email2"] = team_df.loc[team_df["Name"] == week_agents[1], "Email"].values[0]
+
+    return schedule_df
+
 def main():
     logging.info("Start script execution")
     print("Starting script execution...")
+
+    # Back up the current team list
+    backup_existing_team_list()
+
     current_employee_data = read_employee_data(team_list_path)
     previous_employee_data = read_employee_data(team_list_path)
 
@@ -145,6 +185,14 @@ def main():
         backup_existing_assignments()
 
         generate_schedule_weeks()
+
+        schedule_df = pd.read_excel(assignment_path)
+
+        # Assign duties considering availability and balancing
+        schedule_df = assign_duties(schedule_df, current_employee_data)
+
+        # Save the updated schedule
+        schedule_df.to_excel(assignment_path, index=False)
 
         logging.info("Script execution completed.\n")
         print("Script execution completed.\n")
