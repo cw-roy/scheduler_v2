@@ -4,6 +4,7 @@ import pandas as pd
 import logging
 from datetime import datetime, timedelta
 import random
+from collections import deque
 
 # Configure logging
 log_directory = os.path.join(os.path.dirname(__file__), "logging")
@@ -25,7 +26,6 @@ logging.basicConfig(
 
 # Constants
 NUM_WEEKS = 52
-WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
 # Set the paths to the input and output files
 team_list_path = os.path.join(data_directory, "team_list.xlsx")
@@ -151,14 +151,18 @@ def generate_random_pairs(agents):
     return pairs
 
 def assign_duties(schedule_df, team_df):
-    agents = list(team_df["Name"])
-    random_pairs = generate_random_pairs(agents)
+    available_agents = team_df[team_df["Available"] == "yes"]["Name"].tolist()
+    random_pairs = generate_random_pairs(available_agents)
+
+    # Use deque for rotating queue of agents
+    agent_queue = deque(random_pairs)
 
     for index, row in schedule_df.iterrows():
-        # start_date = datetime.strptime(row["start_date"], "%m-%d-%Y")
-        # end_date = datetime.strptime(row["end_date"], "%m-%d-%Y")
+        start_date = datetime.strptime(row["start_date"], "%m-%d-%Y")  # noqa: F841
+        end_date = datetime.strptime(row["end_date"], "%m-%d-%Y")  # noqa: F841
 
-        week_agents = random_pairs[index % len(random_pairs)]
+        # Pop a pair from the deque
+        week_agents = agent_queue.popleft()
 
         schedule_df.at[index, "Agent1"] = week_agents[0]
         schedule_df.at[index, "Email1"] = team_df.loc[team_df["Name"] == week_agents[0], "Email"].values[0]
@@ -166,6 +170,9 @@ def assign_duties(schedule_df, team_df):
         if week_agents[1]:
             schedule_df.at[index, "Agent2"] = week_agents[1]
             schedule_df.at[index, "Email2"] = team_df.loc[team_df["Name"] == week_agents[1], "Email"].values[0]
+
+        # Append the used pair back to the deque
+        agent_queue.append(week_agents)
 
     return schedule_df
 
