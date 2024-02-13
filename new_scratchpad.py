@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 import random
 from collections import deque
 
-# Set up folder structure and logging
+# Set up constants, folder structure and logging
+NUM_WEEKS = 52
 log_directory = os.path.join(os.path.dirname(__file__), "logging")
 data_directory = os.path.join(os.path.dirname(__file__), "data")
 history_directory = os.path.join(os.path.dirname(__file__), "history")
@@ -22,9 +23,6 @@ logging.basicConfig(
         logging.FileHandler(os.path.join(log_directory, "script_events.log")),
     ],
 )
-
-# Constants
-NUM_WEEKS = 52
 
 # Set the paths to the input and output files
 team_list_path = os.path.join(data_directory, "team_list.xlsx")
@@ -46,8 +44,10 @@ def generate_schedule_weeks():
         start_date += timedelta(days=7)
 
     schedule_df = pd.DataFrame({"start_date": start_dates, "end_date": end_dates})
-    schedule_df.to_excel(assignment_path, index=False)
-
+    
+    with pd.ExcelWriter(assignment_path, engine='xlsxwriter') as writer:
+        schedule_df.to_excel(writer, sheet_name='Weeks', index=False)
+    
     logging.info(f"Schedule dates written to {assignment_path}")
     print(f"Schedule dates written to {assignment_path}.")
 
@@ -149,11 +149,50 @@ def generate_random_pairs(agents):
         pairs.append((agent1, agent2))
     return pairs
 
+def count_assignments(schedule_df, team_df, counts_df=None):
+    if counts_df is None:
+        counts_df = pd.DataFrame(columns=['Name', 'Assignments'])
+
+    for index, row in schedule_df.iterrows():
+        agent1 = row["Agent1"]
+        agent2 = row["Agent2"]
+
+        if pd.notna(agent1):
+            update_counts(agent1, counts_df)
+        if pd.notna(agent2):
+            update_counts(agent2, counts_df)
+
+    return counts_df
+
+def update_counts(agent, counts_df):
+    if agent in counts_df['Name'].values:
+        counts_df.at[counts_df['Name'] == agent, 'Assignments'] += 1
+    else:
+        new_row = pd.DataFrame({'Name': [agent], 'Assignments': [1]})
+        counts_df = counts_df._append(new_row, ignore_index=True)
+    return counts_df
+
+def fill_blank_assignments(schedule_df, counts_df, team_df):
+    blank_rows = schedule_df[schedule_df['Agent1'].isna()]
+
+    for index, row in blank_rows.iterrows():
+        least_assigned_agent = get_least_assigned_agent(counts_df)
+        counts_df.loc[counts_df['Name'] == least_assigned_agent, 'Assignments'] += 1
+
+        schedule_df.at[index, "Agent1"] = least_assigned_agent
+        schedule_df.at[index, "Email1"] = team_df.loc[team_df["Name"] == least_assigned_agent, "Email"].values[0]
+
+    return schedule_df, counts_df
+
+def get_least_assigned_agent(counts_df):
+    least_assigned_agent = counts_df.loc[counts_df['Assignments'].idxmin()]['Name']
+    return least_assigned_agent
+
 def assign_duties(schedule_df, team_df):
     available_agents = team_df[team_df["Available"] == "yes"]["Name"].tolist()
     random_pairs = generate_random_pairs(available_agents)
 
-    # Use deque for rotating queue of agents
+    # Use deque for a rotating queue of agents
     agent_queue = deque(random_pairs)
 
     for index, row in schedule_df.iterrows():
@@ -176,6 +215,7 @@ def assign_duties(schedule_df, team_df):
     return schedule_df
 
 def main():
+
     logging.info("Start script execution")
     print("Starting script execution...")
 
@@ -191,13 +231,26 @@ def main():
 
         generate_schedule_weeks()
 
-        schedule_df = pd.read_excel(assignment_path)
+        schedule_df = pd.read_excel(assignment_path, sheet_name='Weeks')
+        team_df = pd.read_excel(team_list_path)
 
         # Assign duties considering availability and balancing
         schedule_df = assign_duties(schedule_df, current_employee_data)
 
         # Save the updated schedule
-        schedule_df.to_excel(assignment_path, index=False)
+        with pd.ExcelWriter(assignment_path, engine='openpyxl', mode='a') as writer:
+            schedule_df.to_excel(writer, sheet_name='Weeks', index=False)
+            counts_df = count_assignments(schedule_df, team_df)
+            counts_df.to_excel(writer, sheet_name='Counts', index=False)
+
+        # Fill in blank assignments for an odd number of available agents
+        schedule_df, counts_df = fill_blank_assignments(schedule_df, counts_df, team_df)
+        # schedule_df = fill_blank_assignments(schedule_df, counts_df, team_df)
+
+        # Save the final schedule
+        with pd.ExcelWriter(assignment_path, engine='openpyxl', mode='a') as writer:
+            schedule_df.to_excel(writer, sheet_name='Weeks', index=False)
+            counts_df.to_excel(writer, sheet_name='Counts', index=False)
 
         logging.info("Script execution completed.\n")
         print("Script execution completed.\n")
