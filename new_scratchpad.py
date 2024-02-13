@@ -49,7 +49,7 @@ def generate_schedule_weeks():
         schedule_df.to_excel(writer, sheet_name='Weeks', index=False)
     
     logging.info(f"Schedule dates written to {assignment_path}")
-    print(f"Schedule dates written to {assignment_path}.")
+    # print(f"Schedule dates written to {assignment_path}.")
 
 def read_employee_data(file_path):
     try:
@@ -58,20 +58,20 @@ def read_employee_data(file_path):
         return df
     except Exception as e:
         logging.error(f"Error reading employee data: {e}")
-        print(f"Error reading employee data: {e}")
+        # print(f"Error reading employee data: {e}")
         return None
 
 def load_and_detect_changes(current_employee_data, previous_employee_data):
     logging.info("Load and detect changes in employee data")
-    print("Loading and detecting changes in employee data...")
+    # print("Loading and detecting changes in employee data...")
     if previous_employee_data is not None:
         changes = detect_changes(previous_employee_data, current_employee_data)
         if changes:
             logging.info("Changes detected in team_list.xlsx:")
-            print("Changes detected in team_list.xlsx:")
+            # print("Changes detected in team_list.xlsx:")
             for change in changes:
                 logging.info(change)
-                print(change)
+                # print(change)
 
 def detect_changes(old_data, new_data):
     changes = []
@@ -92,45 +92,45 @@ def detect_changes(old_data, new_data):
 def log_activity(activity_description):
     formatted_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logging.info(f"{formatted_timestamp} - {activity_description}")
-    print(f"{formatted_timestamp} - {activity_description}")
+    # print(f"{formatted_timestamp} - {activity_description}")
 
 def backup_existing_assignments():
     logging.info("Back up existing assignments")
-    print("Backing up existing assignments...")
+    # print("Backing up existing assignments...")
     if os.path.exists(assignment_path):
         timestamp_str = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
         new_file_name = os.path.join(history_directory, f"assignments_backup_as_of_{timestamp_str}.xlsx")
 
         shutil.copy2(assignment_path, new_file_name)
         logging.info(f"Back up {assignment_path} to {new_file_name}")
-        print(f"Assignment log backed up to {new_file_name}")
+        # print(f"Assignment log backed up to {new_file_name}")
 
         # Keep only the last 3 backups, delete older ones
         delete_old_backups(history_directory, "assignments_backup", keep_latest=3)
     else:
         logging.info("No existing assignment data log to back up.")
-        print("No existing assignment data log to back up.")
+        # print("No existing assignment data log to back up.")
 
 def backup_existing_team_list():
     logging.info("Back up existing team list")
-    print("Backing up existing team list...")
+    # print("Backing up existing team list...")
     if os.path.exists(team_list_path):
         timestamp_str = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
         new_file_name = os.path.join(history_directory, f"team_list_backup_as_of_{timestamp_str}.xlsx")
 
         shutil.copy2(team_list_path, new_file_name)
         logging.info(f"Back up {team_list_path} to {new_file_name}")
-        print(f"Team list backed up to {new_file_name}")
+        # print(f"Team list backed up to {new_file_name}")
 
         # Keep only the last 3 backups, delete older ones
         delete_old_backups(history_directory, "team_list_backup", keep_latest=3)
     else:
         logging.info("No existing team list to back up.")
-        print("No existing team list to back up.")
+        # print("No existing team list to back up.")
 
 def delete_old_backups(directory, base_name, keep_latest):
     logging.info(f"Delete old backups in {directory}")
-    print(f"Deleting old backups in {directory}...")
+    # print(f"Deleting old backups in {directory}...")
     files = [f for f in os.listdir(directory) if f.startswith(f"{base_name}_as_of_")]
     files.sort(key=lambda x: os.path.getctime(os.path.join(directory, x)), reverse=True)
 
@@ -138,7 +138,7 @@ def delete_old_backups(directory, base_name, keep_latest):
     for old_file in files[keep_latest:]:
         os.remove(os.path.join(directory, old_file))
         logging.info(f"Retain maximum of {keep_latest} saved logs. Old {base_name} backup deleted: {old_file}")
-        print(f"Retain maximum of {keep_latest} saved logs. Old {base_name} backup deleted.")
+        # print(f"Retain maximum of {keep_latest} saved logs. Old {base_name} backup deleted.")
 
 def generate_random_pairs(agents):
     random.shuffle(agents)
@@ -175,8 +175,11 @@ def update_counts(agent, counts_df):
 def fill_blank_assignments(schedule_df, counts_df, team_df):
     blank_rows = schedule_df[schedule_df['Agent1'].isna()]
 
+    print("Blank rows in schedule_df:")
+    print(blank_rows) 
     for index, row in blank_rows.iterrows():
         least_assigned_agent = get_least_assigned_agent(counts_df)
+        print(f"Selected least assigned agent: {least_assigned_agent}")
         counts_df.loc[counts_df['Name'] == least_assigned_agent, 'Assignments'] += 1
 
         schedule_df.at[index, "Agent1"] = least_assigned_agent
@@ -184,9 +187,29 @@ def fill_blank_assignments(schedule_df, counts_df, team_df):
 
     return schedule_df, counts_df
 
+
+# def fill_blank_assignments(schedule_df, counts_df, team_df):
+#     blank_rows = schedule_df[schedule_df['Agent1'].isna()]
+
+#     for index, row in blank_rows.iterrows():
+#         least_assigned_agent = get_least_assigned_agent(counts_df)
+#         counts_df.loc[counts_df['Name'] == least_assigned_agent, 'Assignments'] += 1
+
+#         schedule_df.at[index, "Agent1"] = least_assigned_agent
+#         schedule_df.at[index, "Email1"] = team_df.loc[team_df["Name"] == least_assigned_agent, "Email"].values[0]
+
+#     return schedule_df, counts_df
+
 def get_least_assigned_agent(counts_df):
+    print("Inside get_least_assigned_agent")
     least_assigned_agent = counts_df.loc[counts_df['Assignments'].idxmin()]['Name']
+    print(f"Least assigned agent: {least_assigned_agent}")
     return least_assigned_agent
+
+
+# def get_least_assigned_agent(counts_df):
+#     least_assigned_agent = counts_df.loc[counts_df['Assignments'].idxmin()]['Name']
+#     return least_assigned_agent
 
 def assign_duties(schedule_df, team_df):
     available_agents = team_df[team_df["Available"] == "yes"]["Name"].tolist()
@@ -217,7 +240,7 @@ def assign_duties(schedule_df, team_df):
 def main():
 
     logging.info("Start script execution")
-    print("Starting script execution...")
+    # print("Starting script execution...")
 
     backup_existing_team_list()
 
@@ -238,7 +261,7 @@ def main():
         schedule_df = assign_duties(schedule_df, current_employee_data)
 
         # Save the updated schedule
-        with pd.ExcelWriter(assignment_path, engine='openpyxl', mode='a') as writer:
+        with pd.ExcelWriter(assignment_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
             schedule_df.to_excel(writer, sheet_name='Weeks', index=False)
             counts_df = count_assignments(schedule_df, team_df)
             counts_df.to_excel(writer, sheet_name='Counts', index=False)
@@ -248,16 +271,16 @@ def main():
         # schedule_df = fill_blank_assignments(schedule_df, counts_df, team_df)
 
         # Save the final schedule
-        with pd.ExcelWriter(assignment_path, engine='openpyxl', mode='a') as writer:
+        with pd.ExcelWriter(assignment_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
             schedule_df.to_excel(writer, sheet_name='Weeks', index=False)
             counts_df.to_excel(writer, sheet_name='Counts', index=False)
 
         logging.info("Script execution completed.\n")
-        print("Script execution completed.\n")
+        # print("Script execution completed.\n")
     else:
         error_message = "Problem reading from team_list.xlsx"
         logging.error(f"{error_message}\n")
-        print(f"{error_message}\n")
+        # print(f"{error_message}\n")
 
 if __name__ == "__main__":
     main()
