@@ -175,30 +175,19 @@ def update_counts(agent, counts_df):
 
     return counts_df
 
-
-# def update_counts(agent, counts_df):
-#     if agent in counts_df['Name'].values:
-#         counts_df.at[counts_df['Name'] == agent, 'Assignments'] += 1
-#     else:
-#         new_row = pd.DataFrame({'Name': [agent], 'Assignments': [1]})
-#         counts_df = counts_df._append(new_row, ignore_index=True)
-
-#     print("Counts DataFrame inside update_counts:")
-#     print(counts_df)  # Add this line to print counts_df
-
-#     return counts_df
-
 def fill_blank_assignments(schedule_df, counts_df, team_df):
-
-    # Identify rows with blank assignments
-    blank_rows = schedule_df[schedule_df["Agent1"].isnull()]
+    # Identify cells with blank assignments
+    blank_cells = schedule_df.applymap(lambda x: pd.isnull(x))
 
     print("Entering fill_blank_assignments function")
-    print("Blank rows in schedule_df:")
-    print(blank_rows)
+    print("Blank cells in schedule_df:")
+    for index, row in blank_cells.iterrows():
+        for col, is_blank in row.items():
+            if is_blank:
+                print(f"Index: {index}, Column: {col}, Value: {schedule_df.at[index, col]}")
 
-    for index, row in blank_rows.iterrows():
-        print(f"Filling blank row at index {index}")
+    for index, row in blank_cells.iterrows():
+        print(f"Filling blank cell(s) at index {index}")
 
         least_assigned_agent = get_least_assigned_agent(counts_df)
         if least_assigned_agent is not None:
@@ -206,17 +195,55 @@ def fill_blank_assignments(schedule_df, counts_df, team_df):
 
             # Update counts_df with the assigned agent
             counts_df.loc[counts_df["Name"] == least_assigned_agent, "Assignments"] += 1
-            counts_df.loc[counts_df["Name"] == least_assigned_agent, "TotalAssignments"] += 1
+            # Assuming "TotalAssignments" is a valid column in counts_df
+            # counts_df.loc[counts_df["Name"] == least_assigned_agent, "TotalAssignments"] += 1
 
             # Update schedule_df with the assigned agent
-            schedule_df.at[index, "Agent1"] = least_assigned_agent
-            schedule_df.at[index, "Email1"] = team_df.loc[team_df["Name"] == least_assigned_agent, "Email"].values[0]
+            for col, is_blank in row.items():
+                if is_blank:
+                    schedule_df.at[index, col] = least_assigned_agent
+                    email_col = f"Email{col[-1]}"  # Adjust the email column based on Agent column
+                    schedule_df.at[index, email_col] = team_df.loc[team_df["Name"] == least_assigned_agent, "Email"].values[0]
         else:
             print("No least assigned agent available. Skipping assignment.")
 
     print("Exiting fill_blank_assignments function")
 
     return schedule_df, counts_df
+
+
+# def fill_blank_assignments(schedule_df, counts_df, team_df):
+#     # Identify cells with blank assignments
+#     blank_cells = schedule_df[schedule_df.isnull().any(axis=1)]
+
+#     print("Entering fill_blank_assignments function")
+#     print("Blank cells in schedule_df:")
+#     for index, row in blank_cells.iterrows():
+#         for col in schedule_df.columns:
+#             if pd.isnull(row[col]):
+#                 print(f"Index: {index}, Column: {col}, Value: {row[col]}")
+
+#     for index, row in blank_cells.iterrows():
+#         print(f"Filling blank cell(s) at index {index}")
+
+#         least_assigned_agent = get_least_assigned_agent(counts_df)
+#         if least_assigned_agent is not None:
+#             print("Assigning duties for least assigned agent:", least_assigned_agent)
+
+#             # Update counts_df with the assigned agent
+#             counts_df.loc[counts_df["Name"] == least_assigned_agent, "Assignments"] += 1
+#             # Assuming "TotalAssignments" is a valid column in counts_df
+#             # counts_df.loc[counts_df["Name"] == least_assigned_agent, "TotalAssignments"] += 1
+
+#             # Update schedule_df with the assigned agent
+#             schedule_df.at[index, "Agent1"] = least_assigned_agent
+#             schedule_df.at[index, "Email1"] = team_df.loc[team_df["Name"] == least_assigned_agent, "Email"].values[0]
+#         else:
+#             print("No least assigned agent available. Skipping assignment.")
+
+#     print("Exiting fill_blank_assignments function")
+
+#     return schedule_df, counts_df
 
 def get_least_assigned_agent(counts_df):
     # Filter agents with the minimum assignment count
@@ -230,11 +257,12 @@ def get_least_assigned_agent(counts_df):
         return None
 
     # Choose the agent with the fewest total assignments
-    least_assigned_agent = available_agents.loc[available_agents["TotalAssignments"].idxmin()]["Name"]
+    # least_assigned_agent = available_agents.loc[available_agents["TotalAssignments"].idxmin()]["Name"]
+    least_assigned_agent = available_agents.loc[available_agents["Assignments"].idxmin()]["Name"]
+
     print("Selected least assigned agent:", least_assigned_agent)
-
+    
     return least_assigned_agent
-
 
 def assign_duties(schedule_df, team_df):
     available_agents = team_df[team_df["Available"] == "yes"]["Name"].tolist()
