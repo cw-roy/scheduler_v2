@@ -18,7 +18,10 @@
     - See "Installation" section below for Virtual Environment setup
 
 2. **Setup:**
+   - Folder structure will be created if it doesn't exist.
    - Ensure your team list is in the `data` directory as `team_list.xlsx`.
+   - `team_list.xlsx` must contain 3 columns: Name, Email, and Available (case sensitive).
+   - The 'Available' column must contain either yes or no values (not case sensitive).
 
 3. **Review Output:**
    - The script will generate a schedule in the `data` directory named `assignments.xlsx`.
